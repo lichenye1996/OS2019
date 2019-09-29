@@ -17,7 +17,7 @@
 /* This is a simple signal handler that prints the signal number.
  */
 static void sighandler(int sig){
-	printf("got signal %d\n", sig);
+	printf("\ngot signal %d\n", sig);
 }
 
 /* Disable interrupts.
@@ -35,7 +35,8 @@ void interrupts_disable(){
  */
 void interrupts_enable(){
 // BEGIN
-	printf("ENABLE INTERRUPTS\n");	// replace this line
+	//printf("ENABLE INTERRUPTS\n");	// replace this line
+	signal(SIGINT, SIG_DFL);
 // END
 }
 
@@ -44,7 +45,13 @@ void interrupts_enable(){
  */
 void interrupts_catch(){
 // BEGIN
-	printf("CATCH INTERRUPTS\n");	// replace this line
+	//printf("CATCH INTERRUPTS\n");	// replace this line
+	//interrupts_enable();
+	//signal(SIGINT, sighandler);
+	struct sigaction sa;
+	sa.sa_handler = sighandler;
+	sa.sa_flags = SA_RESTART;
+	sigaction(SIGINT, &sa, NULL);
 // END
 }
 
@@ -55,7 +62,11 @@ void interrupts_catch(){
  */
 static void redir_fd(int fd1, int fd2){
 // BEGIN
-	printf("REDIRECT %d TO %d\n", fd1, fd2);	// replace this line
+	//printf("REDIRECT %d TO %d\n", fd1, fd2);	// replace this line
+	if (dup2(fd2, fd1) == -1) {
+		close(fd2);
+		perror("Error");
+	}
 // END
 }
 
@@ -66,7 +77,17 @@ static void redir_fd(int fd1, int fd2){
  */
 static void redir_file(char *name, int fd, int flags){
 // BEGIN
-	printf("REDIRECT %d TO %s\n", fd, name);	// replace this line
+	//printf("REDIRECT %d TO %s\n", fd, name);	// replace this line
+	int filedesc = open(name, flags, 0644);
+	if (filedesc < 0) {
+		close(filedesc);
+		perror("Error");
+		_exit(1);
+	}
+	else {	
+		dup2(filedesc, fd);
+		close(filedesc);
+	}
 // END
 }
 
@@ -156,8 +177,44 @@ static void execute(command_t command){
  */
 static void spawn(command_t command, int background){
 // BEGIN
-	printf("RUN %s\n", command->argv[0]);	// replace this line
-// END
+	//printf("RUN %s\n", command->argv[0]);	// replace this line
+	int status;
+	int pid = fork();
+	if (pid == 0) {
+		//interrupts_disable();
+		if (background != 0) {
+			interrupts_disable();
+			//fprintf(stdout, "Process %d running in background\n", getpid());
+			redir(command);
+			execute(command);
+		}
+		else {
+			redir(command);
+			execute(command);
+		}
+	}
+	else {
+                if (background != 0) {
+                	fprintf(stdout, "Process %d running in background\n", pid);
+
+                }
+
+                else{
+			int waitPid = -1;
+			while (pid != waitPid) {
+				waitPid = wait(&status);
+				if (WIFSIGNALED(status)) 
+					printf("Process %d terminated with signal %d\n", waitPid, WTERMSIG(status));
+               			if (WIFEXITED(status) == 0 || pid != waitPid)
+					printf("Process %d terminated with status %d\n", waitPid, WEXITSTATUS(status));
+			}
+                }
+                //fprintf(stderr, "Exit code is %d", status);
+        }
+	
+
+
+//END
 }
 
 /* Change the current working directory to command->argv[1], or to
@@ -170,7 +227,9 @@ static void cd(command_t command){
 	}
 	char *dir = command->argv[1];
 // BEGIN
-	printf("CHDIR TO %s\n", dir == 0 ? "<home>" : dir);	// replace this line
+	//printf("CHDIR TO %s\n", dir == 0 ? "<home>" : dir);	// replace this line
+	dir = dir != NULL ? dir : getenv("HOME");
+	if (chdir(dir) != 0) {perror("Error");}
 // END
 }
 
@@ -183,7 +242,16 @@ static void source(command_t command){
 	for (i = 1; command->argv[i] != 0; i++) {
 		char *file = command->argv[i];
 // BEGIN
-	printf("SOURCE FROM %s\n", file);	// replace this line
+	//printf("SOURCE FROM %s\n", file);	// replace this line
+	int fd = open(file, O_RDONLY);
+	if (fd == -1) {
+		perror("Error");
+		//_exit(1);
+	}
+	reader_t reader = reader_create(fd);
+	interpret(reader, 0);
+	reader_free(reader);
+	close(fd);
 // END
 	}
 }
