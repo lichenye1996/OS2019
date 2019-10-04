@@ -9,19 +9,119 @@
 struct device
 {
     // your code here
+    rthread_sema_t mutex;
+    rthread_sema_t whistlerSema;
+    rthread_sema_t listenerSema;
+
+    // keep track of the #
+    int nWhistlerEntered, nWhistlerWaiting;
+    int nListenerEntered, nListenerWaiting;
 };
 
 void dev_init(struct device *dev);
 void dev_enter(struct device *dev, int which);
 void dev_exit(struct device *dev, int which);
+void dev_vacateOne(struct device *dev);
 
 void dev_init(struct device *dev) {
+   rthread_sema_init(&dev->mutex, 1);
+   rthread_sema_init(&dev->whistlerSema, 0);
+   rthread_sema_init(&dev->listenerSema, 0); 
+   dev->nWhistlerEntered = 0;
+   dev->nWhistlerWaiting = 0;
+   dev->nListenerEntered = 0;
+   dev->nListenerWaiting = 0;
 }
 
+void dev_vacateOne(struct device *dev){
+    if (dev->nWhistlerEntered == 0 && dev->nListenerWaiting > 0) {
+        dev->nListenerWaiting--;
+        rthread_sema_vacate(&dev->listenerSema);
+    }
+    else if (dev->nListenerEntered == 0 && dev->nWhistlerWaiting > 0) {
+        dev->nWhistlerWaiting--;
+        rthread_sema_vacate(&dev->whistlerSema);
+    }
+    else {
+        rthread_sema_vacate(&dev->mutex);
+    }
+}
+
+
 void dev_enter(struct device *dev, int which) {
+    rthread_sema_procure(&dev->mutex);
+
+    assert(dev->nWhistlerEntered == 0 || dev->nListenerEntered == 0);
+    // Whistler
+    if (which == 0) {
+        if (dev->nListenerEntered > 0){
+            dev->nWhistlerWaiting++;
+            dev_vacateOne(dev);
+            rthread_sema_procure(&dev->whistlerSema);
+            //printf("listener entered, nWhistler wait = %d\n", dev->nWhistlerWaiting);
+        }
+        assert(dev->nListenerEntered == 0);
+        dev->nWhistlerEntered++;
+        //printf("************** whistler entered wait = %d\n", dev->nWhistlerWaiting);
+        dev_vacateOne(dev);
+    }
+    // Listener
+    else if (which == 1) {
+        if (dev->nWhistlerEntered > 0){
+            dev->nListenerWaiting++;
+            dev_vacateOne(dev);
+            rthread_sema_procure(&dev->listenerSema);
+            //printf("listener entered, nlistener wait = %d\n", dev->nListenerWaiting);
+        }
+        assert(dev->nWhistlerEntered == 0);
+        dev->nListenerEntered++;
+        //printf("************** listener entered wait = %d\n", dev->nListenerWaiting);
+        dev_vacateOne(dev);
+    }
+    else {
+        assert(which != 1 && which != 0);
+    }
+    
+
+
 }
 
 void dev_exit(struct device *dev, int which) {
+    rthread_sema_procure(&dev->mutex);
+    if (which == 0){
+        assert(dev->nListenerEntered == 0);
+        assert(dev->nWhistlerEntered > 0);
+        dev->nWhistlerEntered--;
+        dev_vacateOne(dev);
+        /*
+        if (dev->nWhistlerWaiting > 0){
+            dev->nWhistlerWaiting--;
+            rthread_sema_vacate(&dev->whistlerSema);
+        }
+        else {
+            rthread_sema_vacate(&dev->mutex);
+        }
+        */
+    }
+    else if (which == 1){
+        assert(dev->nWhistlerEntered == 0);
+        assert(dev->nListenerEntered > 0);
+        dev->nListenerEntered--;
+        dev_vacateOne(dev);
+        /*
+        if (dev->nListenerWaiting > 0){
+            dev->nListenerWaiting--;
+            rthread_sema_vacate(&dev->listenerSema);
+        }
+        else {
+            rthread_sema_vacate(&dev->mutex);
+        }
+        */
+    }
+    else {
+        assert(which != 1 && which != 0);
+    }
+
 }
 
 // =============================================================
@@ -42,12 +142,19 @@ void worker(void *shared, void *arg)
     for (int i = 0; i < NEXPERIMENTS; i++)
     {
         printf("worker %s waiting for device\n", name);
+        printf("w_wait = %d, w_in = %d, l_wait = %d, l_in = %d\n",dev->nWhistlerWaiting,dev->nWhistlerEntered,dev->nListenerWaiting, dev->nListenerEntered);
+
         dev_enter(dev, name[0] == 'w');
         printf("worker %s has device\n", name);
+        printf("w_wait = %d, w_in = %d, l_wait = %d, l_in = %d\n",dev->nWhistlerWaiting,dev->nWhistlerEntered,dev->nListenerWaiting, dev->nListenerEntered);
+
+
         rthread_delay(random() % 3000);
         printf("worker %s releases device\n", name);
         dev_exit(dev, name[0] == 'w');
         rthread_delay(random() % 3000);
+        printf("w_wait = %d, w_in = %d, l_wait = %d, l_in = %d\n",dev->nWhistlerWaiting,dev->nWhistlerEntered,dev->nListenerWaiting, dev->nListenerEntered);
+
     }
     printf("worker %s is done\n", name);
 }
