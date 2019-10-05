@@ -54,6 +54,8 @@ void gi_alloc(struct gpu_info *gi, unsigned int ngpus, unsigned int gpus[]) {
     if (ngpus <= NGPUS) {
 	// Accutal runnable threads
         if (ngpus > gi->nfree) {
+            assert(ngpus <= NGPUS);
+            assert(ngpus > gi->nfree);
             gi->waitRequests++;
             gi_vacate(gi);
             rthread_sema_procure(&gi->allocateSema);

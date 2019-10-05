@@ -52,8 +52,8 @@ void dev_vacateOne(struct device *dev){
 
 void dev_enter(struct device *dev, int which) {
     rthread_sema_procure(&dev->mutex);
-
-    assert(dev->nWhistlerEntered == 0 || dev->nListenerEntered == 0);
+    // Check the Invariant
+    assert((dev->nWhistlerEntered >=0 && dev->nListenerEntered == 0) || (dev->nWhistlerEntered == 0 && dev->nListenerEntered >= 0));
     // Whistler
     if (which == 0) {
         if (dev->nListenerEntered > 0){
