@@ -39,6 +39,7 @@ void gi_init(struct gpu_info *gi) {
 }
 
 void gi_vacate(struct gpu_info *gi){
+    // Vacate Sema
     if (gi->nAllocate == 0 && gi->waitRequests > 0) {
         gi->waitRequests--;
         rthread_sema_vacate(&gi->allocateSema);
@@ -50,8 +51,8 @@ void gi_vacate(struct gpu_info *gi){
 
 void gi_alloc(struct gpu_info *gi, unsigned int ngpus, unsigned int gpus[]) {
     rthread_sema_procure(&gi->mutex);
-    //assert(ngpus <= gi->nfree);
     if (ngpus <= NGPUS) {
+	// Accutal runnable threads
         if (ngpus > gi->nfree) {
             gi->waitRequests++;
             gi_vacate(gi);
@@ -71,7 +72,9 @@ void gi_alloc(struct gpu_info *gi, unsigned int ngpus, unsigned int gpus[]) {
         gi_vacate(gi);
     }
     else {
-        assert(ngpus <= NGPUS);
+	// Wait for infinite time if ngpus > NGPUS
+        gi_vacate(gi);
+	while(1);
     }
     
 }
@@ -107,8 +110,6 @@ void gpu_user(void *shared, void *arg)
         unsigned int n = 1 + (random() % NGPUS);
         rthread_with(&print_lock)
         printf("%s %d wants %u gpus\n", (char *) arg, i, n);
-        printf("****** in = %d, wait = %d\n",gi->nAllocate, gi->waitRequests);
-
         gi_alloc(gi, n, gpus);
         rthread_with(&print_lock)
         {
@@ -117,12 +118,10 @@ void gpu_user(void *shared, void *arg)
                 printf(" %d", gpus[i]);
             printf("\n");
         }
-        printf("****** in = %d, wait = %d\n",gi->nAllocate, gi->waitRequests);
         rthread_delay(random() % 3000);
         rthread_with(&print_lock)
             printf("%s %d releases gpus\n", (char *) arg, i);
         gi_release(gi, n, gpus);
-        printf("****** in = %d, wait = %d\n",gi->nAllocate, gi->waitRequests);
     }
 }
 int main()

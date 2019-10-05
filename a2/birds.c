@@ -34,10 +34,12 @@ void dev_init(struct device *dev) {
 }
 
 void dev_vacateOne(struct device *dev){
+    // No whistler entered, and waiting listener
     if (dev->nWhistlerEntered == 0 && dev->nListenerWaiting > 0) {
         dev->nListenerWaiting--;
         rthread_sema_vacate(&dev->listenerSema);
     }
+    // No listener entered, and waiting whistler
     else if (dev->nListenerEntered == 0 && dev->nWhistlerWaiting > 0) {
         dev->nWhistlerWaiting--;
         rthread_sema_vacate(&dev->whistlerSema);
@@ -58,11 +60,9 @@ void dev_enter(struct device *dev, int which) {
             dev->nWhistlerWaiting++;
             dev_vacateOne(dev);
             rthread_sema_procure(&dev->whistlerSema);
-            //printf("listener entered, nWhistler wait = %d\n", dev->nWhistlerWaiting);
         }
         assert(dev->nListenerEntered == 0);
         dev->nWhistlerEntered++;
-        //printf("************** whistler entered wait = %d\n", dev->nWhistlerWaiting);
         dev_vacateOne(dev);
     }
     // Listener
@@ -71,11 +71,9 @@ void dev_enter(struct device *dev, int which) {
             dev->nListenerWaiting++;
             dev_vacateOne(dev);
             rthread_sema_procure(&dev->listenerSema);
-            //printf("listener entered, nlistener wait = %d\n", dev->nListenerWaiting);
         }
         assert(dev->nWhistlerEntered == 0);
         dev->nListenerEntered++;
-        //printf("************** listener entered wait = %d\n", dev->nListenerWaiting);
         dev_vacateOne(dev);
     }
     else {
@@ -93,30 +91,12 @@ void dev_exit(struct device *dev, int which) {
         assert(dev->nWhistlerEntered > 0);
         dev->nWhistlerEntered--;
         dev_vacateOne(dev);
-        /*
-        if (dev->nWhistlerWaiting > 0){
-            dev->nWhistlerWaiting--;
-            rthread_sema_vacate(&dev->whistlerSema);
-        }
-        else {
-            rthread_sema_vacate(&dev->mutex);
-        }
-        */
     }
     else if (which == 1){
         assert(dev->nWhistlerEntered == 0);
         assert(dev->nListenerEntered > 0);
         dev->nListenerEntered--;
         dev_vacateOne(dev);
-        /*
-        if (dev->nListenerWaiting > 0){
-            dev->nListenerWaiting--;
-            rthread_sema_vacate(&dev->listenerSema);
-        }
-        else {
-            rthread_sema_vacate(&dev->mutex);
-        }
-        */
     }
     else {
         assert(which != 1 && which != 0);
@@ -142,19 +122,13 @@ void worker(void *shared, void *arg)
     for (int i = 0; i < NEXPERIMENTS; i++)
     {
         printf("worker %s waiting for device\n", name);
-        printf("w_wait = %d, w_in = %d, l_wait = %d, l_in = %d\n",dev->nWhistlerWaiting,dev->nWhistlerEntered,dev->nListenerWaiting, dev->nListenerEntered);
-
         dev_enter(dev, name[0] == 'w');
         printf("worker %s has device\n", name);
-        printf("w_wait = %d, w_in = %d, l_wait = %d, l_in = %d\n",dev->nWhistlerWaiting,dev->nWhistlerEntered,dev->nListenerWaiting, dev->nListenerEntered);
-
 
         rthread_delay(random() % 3000);
         printf("worker %s releases device\n", name);
         dev_exit(dev, name[0] == 'w');
         rthread_delay(random() % 3000);
-        printf("w_wait = %d, w_in = %d, l_wait = %d, l_in = %d\n",dev->nWhistlerWaiting,dev->nWhistlerEntered,dev->nListenerWaiting, dev->nListenerEntered);
-
     }
     printf("worker %s is done\n", name);
 }
