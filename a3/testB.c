@@ -5,7 +5,7 @@
 
 #define NMIDDLE 7
 #define NHIGH 7
-#define NEXPERIMENTS 5
+#define NEXPERIMENTS 2
 
 char *middle[] = {
     "m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9"};
