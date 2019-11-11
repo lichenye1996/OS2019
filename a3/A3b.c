@@ -51,7 +51,6 @@ void enqueue(struct swimmer** queue, struct swimmer* s)
     
     // add s to the end of the queue
     temp->next = s;
-
     printf("====================================\nthis is my queue: \n");
     struct swimmer* temp2 = *queue;
     while(temp2->next != NULL) {
@@ -118,11 +117,11 @@ void pool_enter(struct pool *pool, int level)
         new_swimmer->next = NULL;
         enqueue(&pool->swimming_queue, new_swimmer);
         //printf("&&&&&&& Dequeue check result is %d &&&&&&&&&\n", !(pool->in == 0 || pool->swimming_queue->middle_high == pool->in_middle_high));
-        while(!((pool->in == 0 || pool->swimming_queue->middle_high == pool->in_middle_high) && pool->swimming_queue->is_head == 1)) {
+        while(!((pool->in == 0 || pool->swimming_queue->middle_high == pool->in_middle_high) && new_swimmer->is_head == 1)) {
             rthread_cv_wait(&pool->swimmer_wait);
         }
         if(level){
-            printf("xxxxxxxxxxxxxxx h released!\n");
+            printf("xxxxxxxxxxxxxxx h released! with pool_in = %d, in_middle_high = %d, is_head = %d\n", pool->in, pool->in_middle_high, new_swimmer->is_head);
         }
         else{
             printf("%%%%%%%%%%%%%% m released!\n");
