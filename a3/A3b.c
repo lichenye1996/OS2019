@@ -77,18 +77,28 @@ void enqueue(struct swimmer** queue, struct swimmer* s)
 struct swimmer* dequeue(struct swimmer** queue)
 {
     struct swimmer* temp = *queue;
-    // struct swimmer* temp2 = *queue;
     // empty queue
     if(!temp) return NULL;
     // remove and return
     *queue = temp->next;
-    // while(temp2->next != NULL && temp2->next->middle_high == temp2->middle_high){
-    //     temp2->is_head = 1;
-    //     temp2 = temp2->next;
-    // }
-    if(temp->next != NULL) (*queue)->is_head = 1;
+    struct swimmer*** temp2 = &queue;
+    if (temp->next != NULL) temp->next->is_head = 1;
+    while((**temp2) != NULL && (**temp2)->next->middle_high == (**temp2)->middle_high){
+        (**temp2)->next->is_head = 1;
+        (**temp2) = (**temp2)->next;
+    }
+    
     return temp;
 
+}
+
+void set_queue_heads(struct swimmer** queue)
+{
+    struct swimmer*** temp = &queue;
+    while((**temp) != NULL && (**temp)->next->middle_high == (**temp)->middle_high) {
+        (**temp)->next->is_head = 1;
+        (**temp) = (**temp)->next;
+    }
 }
 
 
@@ -127,6 +137,7 @@ void pool_enter(struct pool *pool, int level)
             printf("%%%%%%%%%%%%%% m released!\n");
         }
         swimmer_in = dequeue(&pool->swimming_queue);
+        //set_queue_heads(&pool->swimming_queue);
 
         while(pool->in == NLANES) {
             rthread_cv_wait(&pool->lane_wait);
