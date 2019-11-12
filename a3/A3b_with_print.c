@@ -27,9 +27,19 @@ void enqueue(struct swimmer** queue, struct swimmer* s)
     struct swimmer* temp = *queue; 
     s->next = NULL;
     // queue is empty
-    if(*queue == NULL) {        
+    //printf("**** queue is %d *****\n",*queue==NULL);
+    if(*queue == NULL) {
+        
         *queue = s;
         (*queue)->is_head = 1;
+
+        printf("====================================\nthis is my queue: \n");
+        struct swimmer* temp2 = *queue;
+        printf("%d \n", temp2->middle_high);
+        printf("%d \n", temp2->last_middle_high);
+        printf("is head %d", temp2->is_head);
+        printf("\n===================================\n");
+
         return;
     }
 
@@ -38,9 +48,28 @@ void enqueue(struct swimmer** queue, struct swimmer* s)
         temp->next->last_middle_high = temp->middle_high;
         temp = temp->next;
     }
-
+    
     // add s to the end of the queue
     temp->next = s;
+    printf("====================================\nthis is my queue: \n");
+    struct swimmer* temp2 = *queue;
+    while(temp2->next != NULL) {
+        printf("%d ", temp2->middle_high);
+        temp2 = temp2->next;
+    }
+    printf("\n");
+    struct swimmer* temp3 = *queue;
+    while(temp3->next != NULL) {
+        printf("%d ", temp3->last_middle_high);
+        temp3 = temp3->next;
+    }
+    printf("\n");
+    struct swimmer* temp4 = *queue;
+    while(temp4->next != NULL) {
+        printf("%d ", temp4->is_head);
+        temp4 = temp4->next;
+    }
+    printf("\n===================================\n");
 
     return;
 }
@@ -53,15 +82,28 @@ struct swimmer* dequeue(struct swimmer** queue)
     // remove and return
     if (temp->next != NULL) temp->next->is_head = 1;
     *queue = temp->next;
-    // set all the swimmers from same level as queue_heads (is_head = 1)
+    
+    struct swimmer*** temp2 = &queue;
+    //printf("queue address is %p\n", temp2);
     while((*queue) != NULL && (*queue)->next != NULL && (*queue)->next->middle_high == (*queue)->middle_high){
         (*queue)->next->is_head = 1;
         (*queue) = (*queue)->next;
     }
     *queue = temp->next;
+    // printf("heads assign done........\n");
     return temp;
 
 }
+
+void set_queue_heads(struct swimmer** queue)
+{
+    struct swimmer*** temp = &queue;
+    while((**temp) != NULL && (**temp)->next->middle_high == (**temp)->middle_high) {
+        (**temp)->next->is_head = 1;
+        (**temp) = (**temp)->next;
+    }
+}
+
 
 void pool_init(struct pool *pool)
 {
@@ -80,26 +122,39 @@ void pool_enter(struct pool *pool, int level)
     rthread_with(&pool->lock)
     {
         // write the code here to enter the pool
-        // initialize a swimmer structure
         struct swimmer* new_swimmer = malloc(5*sizeof(int));
         struct swimmer* swimmer_in = malloc(5*sizeof(int));
         new_swimmer->middle_high = level;
         new_swimmer->last_middle_high = -1;
         new_swimmer->is_head = 0;
         new_swimmer->next = NULL;
-        // enqueue the swimmer
         enqueue(&pool->swimming_queue, new_swimmer);
-        // wait conditions and dequeue
+        //printf("&&&&&&& Dequeue check result is %d &&&&&&&&&\n", !(pool->in == 0 || pool->swimming_queue->middle_high == pool->in_middle_high));
         while(!((pool->in == 0 || pool->swimming_queue->middle_high == pool->in_middle_high) && new_swimmer->is_head == 1)) {
             rthread_cv_wait(&pool->swimmer_wait);
         }
+        // if(pool->swimming_queue->middle_high){
+        //     printf("xxxxxxxxxxxxxxx h released! with pool_in = %d, in_middle_high = %d, is_head = %d\n", pool->in, pool->in_middle_high, new_swimmer->is_head);
+        // }
+        // else{
+        //     printf("%%%%%%%%%%%%%% m released! with pool_in = %d, in_middle_high = %d, is_head = %d\n", pool->in, pool->in_middle_high, new_swimmer->is_head);
+        // }
         swimmer_in = dequeue(&pool->swimming_queue);
-        // check pool capacity (not necessary for the given conditions, but no harm)
+
         while(pool->in == NLANES) {
             rthread_cv_wait(&pool->lane_wait);
         }
         pool->in++;
         pool->in_middle_high = swimmer_in->middle_high;
+        if(level){
+            printf("............h has entered!\n");
+        }
+        else{
+            printf("............m has entered!\n");
+        }
+        
+
+
     }
 }
 
@@ -108,10 +163,19 @@ void pool_exit(struct pool *pool, int level)
     rthread_with(&pool->lock)
     {
         // write the code here to exit the pool
+        printf("exit point......\n");
         pool->in--;
         rthread_cv_notifyAll(&pool->lane_wait);
         if(pool->in == 0){
             rthread_cv_notifyAll(&pool->swimmer_wait);
         }
+        if(level){
+            printf("............h has left!\n");
+        }
+        else{
+            printf("............m has left!\n");
+        }
+        
+
     }
 }
